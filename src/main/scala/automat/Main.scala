@@ -15,6 +15,9 @@ import scala.concurrent.duration._
 import scala.util.{Try, Failure, Success}
 
 
+case class Story(title: String, kids: List[Long], descendants: Int)
+case class Comment(by: String, kids: List[Long])
+
 object Main {
   private implicit val formats = DefaultFormats
   private implicit val serialization = native.Serialization
@@ -48,33 +51,64 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-    val req = 
+    val topStoriesRequest = 
       HttpRequest(
         uri = Uri("/v0/topstories.json"),
         headers = List(Accept(MediaTypes.`application/json`))
       )
 
+    def item(n: Int): HttpRequest = 
+      HttpRequest(
+        uri = Uri(s"/v0/item/$n.json"),
+        headers = List(Accept(MediaTypes.`application/json`))
+      )
+       
     def cacheByRequest(request: HttpRequest): (HttpRequest, HttpRequest) = (request, request)
 
-    def show(top: Either[String, List[Int]]): Unit = {
+    def showTop(top: Either[String, List[Int]]): Unit = {
       top match {
-        case Right(list) => list.take(10).foreach(println)
+        case Right(list) => list.take(30).foreach(println)
         case Left(e)     => println(e)
       }
     }
-    
+
     val topStories = 
-      Source.single(req)
+      Source.single(topStoriesRequest)
        .map(cacheByRequest)
        .via(connectionPool)
        .via(parseJson[List[Int]])
-       .runWith(Sink.foreach(show))
+       .runWith(Sink.foreach(showTop))
 
     Await.result(
       topStories,
       Duration.Inf
     )
 
+    def showStory(story: Either[String, Story]): Unit = {
+      story match {
+        case Right(story) => println(story)
+        case Left(e)     => println(e)
+      }
+    }
+
+
+    val oneItem = item(17619352)
+
+    val run =
+      Source.single(oneItem)
+        .map(cacheByRequest)
+        .via(connectionPool)
+        .via(parseJson[Story])
+        .runWith(Sink.foreach(showStory))
+
+    
+    Await.result(
+      run,
+      Duration.Inf
+    )
+
     system.terminate()
   }
 }
+
+

@@ -1,7 +1,6 @@
 scalaVersion := "2.12.6"
 
 libraryDependencies ++= Seq(
-  // "com.github.nscala-time" %% "nscala-time" % "2.14.0"
   "com.typesafe.akka" %% "akka-http"        % "10.0.11",
   "de.heikoseeberger" %% "akka-http-json4s" % "1.19.0",
   "com.typesafe.akka" %% "akka-stream"      % "2.5.6",
