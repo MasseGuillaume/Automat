@@ -1,114 +1,70 @@
+package automat
+
+import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
+import akka.stream._
 import akka.stream.scaladsl._
 
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.unmarshalling._
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 
-import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
-import org.json4s._
-
-import scala.concurrent.{Future, Await}
-import scala.concurrent.duration._
-import scala.util.{Try, Failure, Success}
-
-
-case class Story(title: String, kids: List[Long], descendants: Int)
-case class Comment(by: String, kids: List[Long])
+import java.nio.file._
 
 object Main {
-  private implicit val formats = DefaultFormats
-  private implicit val serialization = native.Serialization
-
   implicit val system = ActorSystem()
   import system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  private val connectionPool
-    : Flow[(HttpRequest, HttpRequest),
-           (Try[HttpResponse], HttpRequest),
-           Http.HostConnectionPool] = {
-
-    Http().cachedHostConnectionPoolHttps[HttpRequest]("hacker-news.firebaseio.com")
-  }
-
-  private def parseJson[T](implicit un: Unmarshaller[ResponseEntity, T])
-    : Flow[(Try[HttpResponse], _),
-           Either[String, T],
-           akka.NotUsed] = {
-    Flow[(Try[HttpResponse], _)]
-      .mapAsyncUnordered(parallelism = 1) {
-        case (Success(res @ HttpResponse(StatusCodes.OK, _, entity, _)), ar) => {
-          Unmarshal(entity).to[T].map(Right(_))
-        }
-        case (Success(x), ar) =>
-          Future.successful(Left(s"Unexpected status code ${x.status} for $ar"))
-        case (Failure(e), ar) =>
-          Future.failed(new Exception(s"Failed to fetch $ar", e))
-      }
-  }
-
   def main(args: Array[String]): Unit = {
-    val topStoriesRequest = 
-      HttpRequest(
-        uri = Uri("/v0/topstories.json"),
-        headers = List(Accept(MediaTypes.`application/json`))
-      )
+    val topStoriesCount = 30
+    val topCommentersCount = 10
 
-    def item(n: Int): HttpRequest = 
-      HttpRequest(
-        uri = Uri(s"/v0/item/$n.json"),
-        headers = List(Accept(MediaTypes.`application/json`))
-      )
-       
-    def cacheByRequest(request: HttpRequest): (HttpRequest, HttpRequest) = (request, request)
+    val http = new ViaHttp(topStoriesCount)
 
-    def showTop(top: Either[String, List[Int]]): Unit = {
-      top match {
-        case Right(list) => list.take(30).foreach(println)
-        case Left(e)     => println(e)
-      }
-    }
+    val commentsAggregation = 
+      Await.result(run(http.topStoriesRequest, http.stories, http.comments), Duration.Inf)
 
-    val topStories = 
-      Source.single(topStoriesRequest)
-       .map(cacheByRequest)
-       .via(connectionPool)
-       .via(parseJson[List[Int]])
-       .runWith(Sink.foreach(showTop))
+    val summary = Summary(commentsAggregation, topCommentersCount)
+    val output = summary.toString
 
-    Await.result(
-      topStories,
-      Duration.Inf
-    )
-
-    def showStory(story: Either[String, Story]): Unit = {
-      story match {
-        case Right(story) => println(story)
-        case Left(e)     => println(e)
-      }
-    }
-
-
-    val oneItem = item(17619352)
-
-    val run =
-      Source.single(oneItem)
-        .map(cacheByRequest)
-        .via(connectionPool)
-        .via(parseJson[Story])
-        .runWith(Sink.foreach(showStory))
-
+    val report = Paths.get("summary.md")
+    Files.write(report, output.getBytes)
+    margin()
+    println("Wrote report to" + report.toAbsolutePath.toString)
+    margin()
     
-    Await.result(
-      run,
-      Duration.Inf
-    )
-
     system.terminate()
   }
+
+  private def margin(): Unit = (1 to 10).foreach(_ => println())
+
+  def run(topStoriesRequest: => Future[List[ItemId]],
+          stories: Flow[ItemId, Story, NotUsed],
+          comments: Flow[ItemId, Comment, NotUsed]
+  ): Future[CommentsCount] = {
+    val accumulateComments: Sink[Comment, Future[Histogram[User]]] =
+      Sink.fold(Histogram.empty[User])(
+        (histogram, comment) => histogram + comment.user
+      )
+
+    val parallelism = 1
+
+    topStoriesRequest.flatMap( topStories =>
+      Source(topStories)
+        .via(stories)
+        .mapAsync(parallelism)(story => {
+          
+          println("Running: " + story.title)
+
+          SourceExtension.unfoldSource(story.kids, comments)(_.kids)
+            .runWith(accumulateComments)
+            .map(histogram => {
+              println("Done: " + story.title)
+              (story.title, histogram)
+            })
+        })
+        .runWith(Sink.seq)
+        .map(_.toList)
+    )
+  }
 }
-
-
