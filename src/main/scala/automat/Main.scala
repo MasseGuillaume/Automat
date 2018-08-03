@@ -56,7 +56,7 @@ object Main {
           
           println("Running: " + story.title)
 
-          SourceExtension.unfoldSource(story.kids, comments)(_.kids)
+          Source.unfoldTree[ItemId, Comment](story.kids, comments, _.kids, bufferSize = 10000)
             .runWith(accumulateComments)
             .map(histogram => {
               println("Done: " + story.title)

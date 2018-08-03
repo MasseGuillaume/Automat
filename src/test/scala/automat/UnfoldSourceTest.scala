@@ -10,13 +10,14 @@ import akka.stream.scaladsl._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-object SourceExtensionTest extends TestSuite{
+object UnfoldSourceTest extends TestSuite{
   implicit val system = ActorSystem()
+  import system.dispatcher
   implicit val materializer = ActorMaterializer()
 
   def collect(flow: Flow[Int, List[Int], NotUsed], seed: Int): List[Int] = {
     val result = 
-      SourceExtension.unfoldSource(List(seed), flow)(x => x)
+      Source.unfoldTree[Int, List[Int]](List(seed), flow, x => x, bufferSize = 10)
         .mapConcat(x => x)
         .runWith(Sink.seq)
 
