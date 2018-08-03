@@ -10,15 +10,12 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.unmarshalling._
 
-import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
 import org.json4s._
 
 import scala.concurrent.Future
 import scala.util.{Try, Failure, Success}
 
-
-import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
-import org.json4s._
+import java.io.{PrintWriter, StringWriter}
 
 object Api {
   case class Story(title: String, kids: List[ItemId])
@@ -27,25 +24,39 @@ object Api {
 
 class ViaHttp(topStoriesCount: Int)(implicit materializer: ActorMaterializer, system: ActorSystem) {
   import system.dispatcher
-
+  import Json4sSupport.unmarshaller
 
   private implicit val formats = DefaultFormats
   private implicit val serialization = native.Serialization
 
 
   private type HttpFlow[T] = Flow[(Try[HttpResponse], _), T, akka.NotUsed]
+  private type HttpUnmarshall[T] = Unmarshaller[ResponseEntity, Either[Throwable, Option[T]]]
 
-  private def parseJson[T](implicit un: Unmarshaller[ResponseEntity, T]): HttpFlow[T] = {
+  private def parseJson[T](implicit un: HttpUnmarshall[T]): HttpFlow[T] = {
     Flow[(Try[HttpResponse], _)]
       .mapAsyncUnordered(parallelism = 1) {
         case (Success(res @ HttpResponse(StatusCodes.OK, _, entity, _)), _) =>
-          Unmarshal(entity).to[T]
+          Unmarshal(entity).to[Either[Throwable, Option[T]]]
         case (Success(x), ar) =>
           Future.failed(new Exception(s"Unexpected status code ${x.status} for $ar"))
         case (Failure(e), ar) =>
           Future.failed(new Exception(s"Failed to fetch $ar", e))
       }
+      .via(keepValidAndReportErrors)
   }
+
+  private def keepValidAndReportErrors[T]: Flow[Either[Throwable, Option[T]], T, NotUsed] =
+    Flow[Either[Throwable, Option[T]]]
+      .alsoTo(Sink.foreach{
+        case Left(e) =>
+          val sw = new StringWriter()
+          e.printStackTrace(new PrintWriter(sw))
+          println(sw)
+        case _ => ()
+      })
+      .collect{case Right(Some(v)) => v}
+
   private val parseTopStories = parseJson[List[ItemId]]
   private val parseStory      = parseJson[Api.Story]
   private val parseComment    = parseJson[Api.Comment]

@@ -10,7 +10,7 @@ case class Summary(stories: List[StorySummary]) {
   override def toString: String = {
     val table = new Table.Builder()
 
-    val n = stories.headOption.map(_.topUsers.size).getOrElse(0)
+    val n = stories.map(_.topUsers.size).reduceOption(_ max _).getOrElse(0)
     def toCardinal(i: Int): String = {
       val s = i.toString
       val card =
@@ -28,7 +28,7 @@ case class Summary(stories: List[StorySummary]) {
     table.addRow(header: _*)
 
     stories.foreach{story =>
-      val row = story.title +: story.topUsers.map(_.toString)
+      val row = (story.title +: story.topUsers.map(_.toString)).padTo(n + 1, "")
       table.addRow(row: _*)
     }
 

@@ -47,7 +47,7 @@ object Main {
         (histogram, comment) => histogram + comment.user
       )
 
-    val parallelism = 1
+    val parallelism = 8
 
     topStoriesRequest.flatMap( topStories =>
       Source(topStories)

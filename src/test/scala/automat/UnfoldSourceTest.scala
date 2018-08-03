@@ -8,16 +8,19 @@ import akka.stream._
 import akka.stream.scaladsl._
 
 import scala.concurrent.Await
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 object UnfoldSourceTest extends TestSuite{
   implicit val system = ActorSystem()
   import system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  def collect(flow: Flow[Int, List[Int], NotUsed], seed: Int): List[Int] = {
+  def collect(flow: Flow[Int, List[Int], NotUsed], seed: Int): List[Int] = 
+    collect(flow, List(seed))
+
+  def collect(flow: Flow[Int, List[Int], NotUsed], seeds: List[Int]): List[Int] = {
     val result = 
-      Source.unfoldTree[Int, List[Int]](List(seed), flow, x => x, bufferSize = 10)
+      Source.unfoldTree[Int, List[Int]](seeds, flow.throttle(10, 1.second), x => x, bufferSize = 10)
         .mapConcat(x => x)
         .runWith(Sink.seq)
 
@@ -59,6 +62,13 @@ object UnfoldSourceTest extends TestSuite{
       val obtained = collect(nested, start)
       val expected = ((start + 1) to end).toList
 
+      assert(obtained == expected)
+    }
+
+    "empty" - {
+      val notused: Flow[Int, List[Int], NotUsed] = Flow.fromFunction(_ => Nil)
+      val obtained = collect(notused, Nil)
+      val expected = Nil
       assert(obtained == expected)
     }
   }

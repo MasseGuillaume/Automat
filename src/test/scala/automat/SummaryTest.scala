@@ -47,5 +47,26 @@ object SummaryTest extends TestSuite{
 
       assert(obtained == expected)
     }
+
+    "toString - empty rows" - {
+      val sample2 = 
+        Summary(List(
+          StorySummary(storyA, List(UserSummary(userC, 3,  8), UserSummary(userB, 2, 10))),
+          StorySummary(storyB, Nil),
+          StorySummary(storyC, List(UserSummary(userB, 5, 10), UserSummary(userA, 4,  9)))
+        ))
+
+      val obtained = sample2.toString
+
+      val expected = 
+        """|
+           || Story   | 1st Top Commenter               | 2nd Top Commenter               |
+           || ------- | ------------------------------- | ------------------------------- |
+           || Story A | user-c (3 for story - 8 total)  | user-b (2 for story - 10 total) |
+           || Story B |                                 |                                 |
+           || Story C | user-b (5 for story - 10 total) | user-a (4 for story - 9 total)  |""".stripMargin
+
+      assert(obtained == expected)
+    }
   }
 }

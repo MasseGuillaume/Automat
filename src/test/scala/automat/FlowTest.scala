@@ -8,7 +8,7 @@ import akka.stream._
 import akka.stream.scaladsl._
 
 import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 object FlowTest extends TestSuite{
   implicit val system = ActorSystem()
@@ -110,8 +110,8 @@ object FlowTest extends TestSuite{
   }
   
   val topStoriesRequest: Future[List[ItemId]] = Future.successful(List(1, 2, 3))
-  val stories: Flow[ItemId, Story,   NotUsed] = Flow.fromFunction(storiesF _)
-  val comments: Flow[ItemId, Comment, NotUsed] = Flow.fromFunction(commentF _)
+  val stories: Flow[ItemId, Story,   NotUsed] = Flow.fromFunction(storiesF _).throttle(1, 1.second)
+  val comments: Flow[ItemId, Comment, NotUsed] = Flow.fromFunction(commentF _).throttle(1, 1.second)
 
 
   def assertNoDiff(obtained: CommentsCount, expected: CommentsCount): Unit = {
