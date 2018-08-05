@@ -11,6 +11,4 @@ Running Title
 ...
 Done Title
 
-Sometime, you will get the report in a file at summary.md. There is a bug in the traversal of comments that
-cause a live lock. This is implemented in SourceExtension.scala.
-
+You will get the report in a file called `summary.md` at the root of this project.

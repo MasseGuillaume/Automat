@@ -27,7 +27,10 @@ import org.json4s.{ Formats, MappingException, Serialization, ParserUtil }
 import scala.collection.immutable.Seq
 
 /**
-  * Automatic to and from JSON marshalling/unmarshalling using an in-scope *Json4s* protocol.
+  * Automatic to and from JSON unmarshalling using an in-scope *Json4s* protocol.
+  *
+  * Source: https://github.com/hseeberger/akka-http-json
+  * I removed the marshaller and added a message when serialization fails.
   *
   */
 object Json4sSupport {

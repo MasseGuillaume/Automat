@@ -10,8 +10,6 @@ import scala.concurrent.ExecutionContext
 import scala.collection.mutable
 import scala.util.{Success, Failure, Try}
 
-
-
 class UnfoldSource[S, E](seeds: List[S],
                          flow: Flow[S, E, NotUsed],
                          loop: E => List[S],
@@ -40,7 +38,6 @@ class UnfoldSource[S, E](seeds: List[S],
       val batchSize = Math.min(bufferSize - buffer.size, frontier.size)
       val batch = frontier.dequeueN(batchSize)
       inFlight = true
-      debug(s"sent: $batchSize")
 
       val toProcess =
         Source(batch)
@@ -65,7 +62,6 @@ class UnfoldSource[S, E](seeds: List[S],
           } else {
             checkCompletion()
           }
-          debug(s"got: $got")
           ()
         }
       }
@@ -100,19 +96,5 @@ class UnfoldSource[S, E](seeds: List[S],
     }
 
     setHandler(out, this)
-
-
-    def debug(msg: String): Unit = {
-      println(
-        s"""|
-            |
-            |$msg
-            |inFlight: ${inFlight}
-            |buffer:   ${buffer.size}
-            |frontier: ${frontier.size}
-            |
-            |""".stripMargin
-      )
-    }
   }
 }
